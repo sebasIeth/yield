@@ -96,7 +96,7 @@ export async function getYields(opts?: {
     };
     if (opts?.network) params.network = opts.network;
     return apiFetch<YieldsResponse>("/yields", params).catch(() => null);
-  );
+  });
 
   const pages = await Promise.all(pagePromises);
 
