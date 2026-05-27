@@ -1,0 +1,27 @@
+{
+  "name": "yield-xyz-project",
+  "version": "1.0.0",
+  "description": "Dashboard para explorar y ejecutar yield strategies usando Yield.xyz",
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.100.14",
+    "@yieldxyz/sdk": "latest",
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "viem": "^2.51.0",
+    "wagmi": "^2.19.5",
+    "xo-connect": "^2.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.5.0"
+  }
+}
