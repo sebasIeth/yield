@@ -1,14 +1,16 @@
-import { createConnector } from "wagmi";
 import type { Wallet } from "@rainbow-me/rainbowkit";
 
 function xoConnector() {
+  // Use dynamic import to avoid type conflicts with wagmi's strict connector types
+  const { createConnector } = require("wagmi") as any;
+
   return createConnector((config: any) => {
     let provider: any = null;
 
     return {
       id: "xo-connect",
       name: "XO Wallet",
-      type: "injected" as const,
+      type: "injected",
 
       async setup() {},
 
@@ -24,102 +26,61 @@ function xoConnector() {
             "0xa86a": "https://rpc.ankr.com/avalanche",
             "0x38": "https://rpc.ankr.com/bsc",
           },
-          defaultChainId: chainId
-            ? `0x${chainId.toString(16)}`
-            : "0x89",
+          defaultChainId: chainId ? `0x${chainId.toString(16)}` : "0x89",
         });
 
-        const accounts = (await provider.request({
-          method: "eth_requestAccounts",
-        })) as `0x${string}`[];
+        const accounts = await provider.request({ method: "eth_requestAccounts" });
+        const currentChainId = await provider.request({ method: "eth_chainId" });
 
-        const currentChainId = (await provider.request({
-          method: "eth_chainId",
-        })) as string;
-
-        provider.on("chainChanged", (newChainId: string) => {
-          config.emitter.emit("change", {
-            chainId: parseInt(newChainId, 16),
-          });
+        provider.on("chainChanged", (id: string) => {
+          config.emitter.emit("change", { chainId: parseInt(id, 16) });
+        });
+        provider.on("accountsChanged", (accs: string[]) => {
+          if (accs.length === 0) config.emitter.emit("disconnect");
+          else config.emitter.emit("change", { accounts: accs });
         });
 
-        provider.on("accountsChanged", (newAccounts: string[]) => {
-          if (newAccounts.length === 0) {
-            config.emitter.emit("disconnect");
-          } else {
-            config.emitter.emit("change", {
-              accounts: newAccounts as `0x${string}`[],
-            });
-          }
-        });
-
-        return {
-          accounts: accounts as readonly `0x${string}`[],
-          chainId: parseInt(currentChainId, 16),
-        };
+        return { accounts, chainId: parseInt(currentChainId, 16) };
       },
 
-      async disconnect() {
-        provider = null;
-      },
+      async disconnect() { provider = null; },
 
       async getAccounts() {
         if (!provider) return [];
-        const accounts = (await provider.request({
-          method: "eth_accounts",
-        })) as `0x${string}`[];
-        return accounts as readonly `0x${string}`[];
+        return provider.request({ method: "eth_accounts" });
       },
 
       async getChainId() {
         if (!provider) return 137;
-        const chainId = (await provider.request({
-          method: "eth_chainId",
-        })) as string;
-        return parseInt(chainId, 16);
+        const id = await provider.request({ method: "eth_chainId" });
+        return parseInt(id, 16);
       },
 
-      async getProvider() {
-        return provider;
-      },
+      async getProvider() { return provider; },
 
       async isAuthorized() {
         if (!provider) return false;
-        const accounts = (await provider.request({
-          method: "eth_accounts",
-        })) as string[];
-        return accounts.length > 0;
+        const accs = await provider.request({ method: "eth_accounts" });
+        return accs.length > 0;
       },
 
-      async switchChain({ chainId }: { chainId: number }) {
+      async switchChain({ chainId }: any) {
         if (!provider) throw new Error("Not connected");
         await provider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: `0x${chainId.toString(16)}` }],
         });
-        const chain = config.chains.find((c: any) => c.id === chainId);
-        return chain ?? config.chains[0];
+        return config.chains.find((c: any) => c.id === chainId) ?? config.chains[0];
       },
 
       onAccountsChanged(accounts: string[]) {
-        if (accounts.length === 0) {
-          config.emitter.emit("disconnect");
-        } else {
-          config.emitter.emit("change", {
-            accounts: accounts as `0x${string}`[],
-          });
-        }
+        if (accounts.length === 0) config.emitter.emit("disconnect");
+        else config.emitter.emit("change", { accounts });
       },
-
       onChainChanged(chainId: string) {
-        config.emitter.emit("change", {
-          chainId: parseInt(chainId, 16),
-        });
+        config.emitter.emit("change", { chainId: parseInt(chainId, 16) });
       },
-
-      onDisconnect() {
-        config.emitter.emit("disconnect");
-      },
+      onDisconnect() { config.emitter.emit("disconnect"); },
     };
   });
 }
