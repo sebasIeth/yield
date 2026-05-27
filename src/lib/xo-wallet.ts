@@ -125,11 +125,11 @@ function xoConnector() {
   });
 }
 
-export const xoWallet: Wallet = {
+export const xoWallet = (): Wallet => ({
   id: "xo-connect",
   name: "XO Wallet",
   iconUrl: "https://xo-connect.xolabs.io/favicon.ico",
   iconBackground: "#000000",
   installed: true,
   createConnector: xoConnector,
-};
+});
