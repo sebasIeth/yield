@@ -88,15 +88,14 @@ export async function getYields(opts?: {
 
   const pageSize = 100;
   const maxPages = 10;
-  const networkParam = opts?.network ? { network: opts.network } : {};
-
   // Fetch all pages in parallel (fire pages 0-9 at once)
-  const pagePromises = Array.from({ length: maxPages }, (_, i) =>
-    apiFetch<YieldsResponse>("/yields", {
+  const pagePromises = Array.from({ length: maxPages }, (_, i) => {
+    const params: Record<string, string> = {
       limit: String(pageSize),
       page: String(i),
-      ...networkParam,
-    }).catch(() => null)
+    };
+    if (opts?.network) params.network = opts.network;
+    return apiFetch<YieldsResponse>("/yields", params).catch(() => null);
   );
 
   const pages = await Promise.all(pagePromises);
