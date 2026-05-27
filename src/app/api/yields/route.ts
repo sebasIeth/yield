@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const network = searchParams.get("network") || undefined;
     const limit = Number(searchParams.get("limit")) || 50;
 
-    const raw = await getYields({ network, limit });
+    const raw = await getYields({ network });
 
     // Only show Ethereum, Polygon, and Base
     const allowedNetworks = new Set(["ethereum", "polygon", "base"]);
