@@ -2,7 +2,7 @@ import { createConnector } from "wagmi";
 import type { Wallet } from "@rainbow-me/rainbowkit";
 
 function xoConnector() {
-  return createConnector((config) => {
+  return createConnector((config: any) => {
     let provider: any = null;
 
     return {
@@ -12,7 +12,7 @@ function xoConnector() {
 
       async setup() {},
 
-      async connect({ chainId } = {} as any) {
+      async connect({ chainId }: any = {}) {
         const { XOConnectProvider } = await import("xo-connect");
         provider = new XOConnectProvider({
           rpcs: {
@@ -31,13 +31,12 @@ function xoConnector() {
 
         const accounts = (await provider.request({
           method: "eth_requestAccounts",
-        })) as string[];
+        })) as `0x${string}`[];
 
         const currentChainId = (await provider.request({
           method: "eth_chainId",
         })) as string;
 
-        // Listen for changes
         provider.on("chainChanged", (newChainId: string) => {
           config.emitter.emit("change", {
             chainId: parseInt(newChainId, 16),
@@ -55,7 +54,7 @@ function xoConnector() {
         });
 
         return {
-          accounts: accounts as `0x${string}`[],
+          accounts: accounts as readonly `0x${string}`[],
           chainId: parseInt(currentChainId, 16),
         };
       },
@@ -68,8 +67,8 @@ function xoConnector() {
         if (!provider) return [];
         const accounts = (await provider.request({
           method: "eth_accounts",
-        })) as string[];
-        return accounts as `0x${string}`[];
+        })) as `0x${string}`[];
+        return accounts as readonly `0x${string}`[];
       },
 
       async getChainId() {
@@ -98,7 +97,7 @@ function xoConnector() {
           method: "wallet_switchEthereumChain",
           params: [{ chainId: `0x${chainId.toString(16)}` }],
         });
-        const chain = config.chains.find((c) => c.id === chainId);
+        const chain = config.chains.find((c: any) => c.id === chainId);
         return chain ?? config.chains[0];
       },
 
