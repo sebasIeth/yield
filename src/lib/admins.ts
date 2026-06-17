@@ -9,6 +9,8 @@ export interface AdminDoc {
   salt: string;
   hash: string;
   totpSecret: string;
+  /** Si ya escaneó el secreto en su app de autenticación. */
+  totpEnrolled?: boolean;
 }
 
 const COLLECTION = "admins";
@@ -19,4 +21,11 @@ export async function getAdminByEmail(email: string): Promise<AdminDoc | null> {
     .collection(COLLECTION)
     .findOne({ email: email.toLowerCase().trim() });
   return doc as AdminDoc | null;
+}
+
+export async function markEnrolled(email: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .collection(COLLECTION)
+    .updateOne({ email: email.toLowerCase().trim() }, { $set: { totpEnrolled: true } });
 }

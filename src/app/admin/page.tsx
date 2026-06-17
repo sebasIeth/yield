@@ -20,6 +20,15 @@ interface AdminYield {
   token?: { name?: string; symbol?: string; logoURI?: string };
 }
 
+function LockIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
 function PowerIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -33,24 +42,28 @@ const fmtApy = (v?: number) => (v ? (v * 100).toFixed(2) + "%" : "—");
 const fmtType = (t?: string) =>
   t ? t.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") : "";
 
+type Stage = "creds" | "enroll" | "totp";
+
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [token, setToken] = useState("");
-  const [emailInput, setEmailInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [codeInput, setCodeInput] = useState("");
+  const [checking, setChecking] = useState(true);
+
+  const [stage, setStage] = useState<Stage>("creds");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [qr, setQr] = useState("");
+  const [secret, setSecret] = useState("");
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [checking, setChecking] = useState(true);
 
   // El token de sesión lleva su propio vencimiento (exp); lo validamos local
   // para decidir si mostrar el panel. La firma se verifica en el servidor en
   // cada escritura.
   function sessionLive(t: string): boolean {
     try {
-      const payload = JSON.parse(
-        atob(t.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))
-      );
+      const payload = JSON.parse(atob(t.split(".")[0].replace(/-/g, "+").replace(/_/g, "/")));
       return typeof payload.exp === "number" && payload.exp > Date.now();
     } catch {
       return false;
@@ -68,23 +81,54 @@ export default function AdminPage() {
     setChecking(false);
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  async function postLogin(body: object) {
+    const res = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { res, data: await res.json().catch(() => ({})) };
+  }
+
+  // Paso 1: email + contraseña → enroll (QR) o totp (código).
+  const submitCreds = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailInput, password: passwordInput, token: codeInput }),
-      });
-      const data = await res.json().catch(() => ({}));
+      const { res, data } = await postLogin({ email, password });
+      if (!res.ok) {
+        setAuthError(data.error ?? "No se pudo ingresar");
+        return;
+      }
+      if (data.stage === "enroll") {
+        setQr(data.qr);
+        setSecret(data.secret);
+        setStage("enroll");
+      } else {
+        setStage("totp");
+      }
+      setCode("");
+    } catch {
+      setAuthError("Error de conexión");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Paso 2: validar el código TOTP.
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setSubmitting(true);
+    try {
+      const { res, data } = await postLogin({ email, password, token: code });
       if (res.ok && data.token) {
         sessionStorage.setItem("adminToken", data.token);
         setToken(data.token);
         setAuthed(true);
       } else {
-        setAuthError(data.error ?? "No se pudo ingresar");
+        setAuthError(data.error ?? "Código incorrecto");
       }
     } catch {
       setAuthError("Error de conexión");
@@ -93,13 +137,20 @@ export default function AdminPage() {
     }
   };
 
+  const resetToCreds = () => {
+    setStage("creds");
+    setCode("");
+    setAuthError("");
+  };
+
   const logout = () => {
     sessionStorage.removeItem("adminToken");
     setAuthed(false);
     setToken("");
-    setEmailInput("");
-    setPasswordInput("");
-    setCodeInput("");
+    setEmail("");
+    setPassword("");
+    setCode("");
+    setStage("creds");
   };
 
   if (checking) {
@@ -113,62 +164,111 @@ export default function AdminPage() {
     );
   }
 
-  if (!authed) {
-    return (
-      <div className="page">
-        <div className="admin-login">
-          <div className="admin-login-card">
-            <h1 className="admin-login-brand">yield</h1>
-            <h2 className="admin-login-title">Panel de administración</h2>
-            <p className="admin-login-sub">
-              Ingresá tu email, contraseña y el código de 6 dígitos de tu app de
-              autenticación (2FA).
-            </p>
-            <form onSubmit={handleLogin} className="admin-login-form">
-              <input
-                className="amount-input admin-login-input"
-                type="email"
-                placeholder="Email"
-                autoComplete="username"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                autoFocus
-              />
-              <input
-                className="amount-input admin-login-input"
-                type="password"
-                placeholder="Contraseña"
-                autoComplete="current-password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-              />
-              <input
-                className="amount-input admin-login-input admin-2fa-input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="Código 2FA"
-                value={codeInput}
-                onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ""))}
-              />
-              {authError && <p className="form-error">{authError}</p>}
-              <button
-                className="btn btn-primary"
-                type="submit"
-                disabled={!emailInput || !passwordInput || submitting}
-              >
-                {submitting ? "Verificando..." : "Ingresar"}
-              </button>
-            </form>
-            <a className="admin-login-back" href="/">&larr; Volver a la app</a>
-          </div>
-        </div>
-      </div>
-    );
+  if (authed) {
+    return <AdminPanel token={token} onLogout={logout} />;
   }
 
-  return <AdminPanel token={token} onLogout={logout} />;
+  return (
+    <div className="page">
+      <div className="admin-login">
+        <div className="admin-login-card">
+          <div className="admin-login-badge">
+            <LockIcon />
+          </div>
+          <h2 className="admin-login-title">Panel de administración</h2>
+
+          {stage === "creds" && (
+            <>
+              <p className="admin-login-sub">Ingresá con tu cuenta de administrador.</p>
+              <form onSubmit={submitCreds} className="admin-login-form">
+                <input
+                  className="admin-field"
+                  type="email"
+                  placeholder="Email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoFocus
+                />
+                <input
+                  className="admin-field"
+                  type="password"
+                  placeholder="Contraseña"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {authError && <p className="form-error">{authError}</p>}
+                <button className="btn btn-primary" type="submit" disabled={!email || !password || submitting}>
+                  {submitting ? "Verificando..." : "Continuar"}
+                </button>
+              </form>
+            </>
+          )}
+
+          {stage === "enroll" && (
+            <>
+              <p className="admin-login-sub">
+                Activá tu 2FA: escaneá el QR con Google Authenticator o Authy, o cargá la clave a
+                mano. Después ingresá el código de 6 dígitos.
+              </p>
+              {qr && <img className="admin-qr" src={qr} alt="QR para 2FA" width={200} height={200} />}
+              <div className="admin-secret">
+                <span className="admin-secret-label">Clave manual</span>
+                <code className="admin-secret-code">{secret}</code>
+              </div>
+              <form onSubmit={submitCode} className="admin-login-form">
+                <input
+                  className="admin-field admin-2fa-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="Código de 6 dígitos"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  autoFocus
+                />
+                {authError && <p className="form-error">{authError}</p>}
+                <button className="btn btn-primary" type="submit" disabled={code.length !== 6 || submitting}>
+                  {submitting ? "Verificando..." : "Activar y entrar"}
+                </button>
+              </form>
+              <button className="admin-login-back" onClick={resetToCreds}>&larr; Atrás</button>
+            </>
+          )}
+
+          {stage === "totp" && (
+            <>
+              <p className="admin-login-sub">
+                Ingresá el código de 6 dígitos de tu app de autenticación.
+              </p>
+              <form onSubmit={submitCode} className="admin-login-form">
+                <input
+                  className="admin-field admin-2fa-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="Código 2FA"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  autoFocus
+                />
+                {authError && <p className="form-error">{authError}</p>}
+                <button className="btn btn-primary" type="submit" disabled={code.length !== 6 || submitting}>
+                  {submitting ? "Verificando..." : "Ingresar"}
+                </button>
+              </form>
+              <button className="admin-login-back" onClick={resetToCreds}>&larr; Atrás</button>
+            </>
+          )}
+
+          {stage === "creds" && <a className="admin-login-back" href="/">&larr; Volver a la app</a>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {

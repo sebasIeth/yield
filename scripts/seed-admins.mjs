@@ -68,7 +68,7 @@ for (const raw of emails) {
 
   await col.updateOne(
     { email },
-    { $set: { email, salt, hash, totpSecret, createdAt: new Date() } },
+    { $set: { email, salt, hash, totpSecret, totpEnrolled: false, createdAt: new Date() } },
     { upsert: true }
   );
 
