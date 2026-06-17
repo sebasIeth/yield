@@ -1,29 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signSession, totpEnabled, verifyTotp } from "@/lib/admin-auth";
+import { getAdminByEmail } from "@/lib/admins";
+import { verifyPassword, verifyTotp, signSession } from "@/lib/admin-auth";
 
-// otpauth + node crypto requieren runtime Node (no Edge).
+// scrypt + otpauth + node crypto requieren runtime Node (no Edge).
 export const runtime = "nodejs";
 
-// Login del admin: clave (1er factor) + código TOTP (2do factor, si está
-// configurado). Devuelve un token de sesión firmado para autorizar escrituras.
+// Login de admin: email + contraseña + código TOTP (2FA por usuario).
+// Devuelve un token de sesión firmado para autorizar escrituras.
 export async function POST(request: NextRequest) {
-  const adminKey = process.env.ADMIN_KEY;
-  const { key, token } = await request.json().catch(() => ({ key: "", token: "" }));
+  const { email, password, token } = await request
+    .json()
+    .catch(() => ({ email: "", password: "", token: "" }));
 
-  // 1er factor: clave.
-  if (adminKey && key !== adminKey) {
-    return NextResponse.json({ error: "Clave incorrecta" }, { status: 401 });
+  if (!email || !password) {
+    return NextResponse.json({ error: "Ingresá email y contraseña" }, { status: 400 });
   }
 
-  // 2do factor: TOTP (solo si ADMIN_TOTP_SECRET está configurado).
-  if (totpEnabled()) {
-    if (!token) {
-      return NextResponse.json({ error: "Ingresá el código de 6 dígitos", needsTotp: true }, { status: 401 });
-    }
-    if (!verifyTotp(token)) {
-      return NextResponse.json({ error: "Código 2FA incorrecto", needsTotp: true }, { status: 401 });
-    }
+  const admin = await getAdminByEmail(email).catch(() => null);
+
+  // Mensaje genérico para email/contraseña (evita enumerar usuarios).
+  if (!admin || !verifyPassword(password, admin.salt, admin.hash)) {
+    return NextResponse.json({ error: "Email o contraseña incorrectos" }, { status: 401 });
   }
 
-  return NextResponse.json({ ok: true, token: signSession(), totp: totpEnabled() });
+  // 2do factor: código TOTP del authenticator.
+  if (!token) {
+    return NextResponse.json(
+      { error: "Ingresá el código de 6 dígitos", needsTotp: true },
+      { status: 401 }
+    );
+  }
+  if (!verifyTotp(admin.totpSecret, token)) {
+    return NextResponse.json({ error: "Código 2FA incorrecto", needsTotp: true }, { status: 401 });
+  }
+
+  return NextResponse.json({ ok: true, token: signSession(admin.email), email: admin.email });
 }

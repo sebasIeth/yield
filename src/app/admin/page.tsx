@@ -36,7 +36,8 @@ const fmtType = (t?: string) =>
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [token, setToken] = useState("");
-  const [keyInput, setKeyInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [authError, setAuthError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +76,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: keyInput, token: codeInput }),
+        body: JSON.stringify({ email: emailInput, password: passwordInput, token: codeInput }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
@@ -96,7 +97,8 @@ export default function AdminPage() {
     sessionStorage.removeItem("adminToken");
     setAuthed(false);
     setToken("");
-    setKeyInput("");
+    setEmailInput("");
+    setPasswordInput("");
     setCodeInput("");
   };
 
@@ -119,16 +121,26 @@ export default function AdminPage() {
             <h1 className="admin-login-brand">yield</h1>
             <h2 className="admin-login-title">Panel de administración</h2>
             <p className="admin-login-sub">
-              Ingresá tu clave y el código de 6 dígitos de tu app de autenticación (2FA).
+              Ingresá tu email, contraseña y el código de 6 dígitos de tu app de
+              autenticación (2FA).
             </p>
             <form onSubmit={handleLogin} className="admin-login-form">
               <input
                 className="amount-input admin-login-input"
-                type="password"
-                placeholder="Clave de admin"
-                value={keyInput}
-                onChange={(e) => setKeyInput(e.target.value)}
+                type="email"
+                placeholder="Email"
+                autoComplete="username"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
                 autoFocus
+              />
+              <input
+                className="amount-input admin-login-input"
+                type="password"
+                placeholder="Contraseña"
+                autoComplete="current-password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
               />
               <input
                 className="amount-input admin-login-input admin-2fa-input"
@@ -141,7 +153,11 @@ export default function AdminPage() {
                 onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ""))}
               />
               {authError && <p className="form-error">{authError}</p>}
-              <button className="btn btn-primary" type="submit" disabled={!keyInput || submitting}>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={!emailInput || !passwordInput || submitting}
+              >
                 {submitting ? "Verificando..." : "Ingresar"}
               </button>
             </form>

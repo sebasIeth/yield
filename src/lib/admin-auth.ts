@@ -1,48 +1,63 @@
 import crypto from "crypto";
 import { TOTP, Secret } from "otpauth";
 
-// Autenticación del admin: clave (1er factor) + TOTP (2do factor). Tras un
-// login válido se emite un token de sesión firmado (HMAC) con vencimiento, que
-// protege también las escrituras de /api/curation — así el 2FA cubre la API,
-// no sólo la pantalla.
+// Autenticación de admins: email + contraseña (scrypt) + TOTP (2FA por usuario).
+// Tras login válido se emite un token de sesión firmado (HMAC) con vencimiento,
+// que protege también las escrituras de /api/curation.
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 h
 
+// Secreto de firma del servidor (nunca llega al cliente).
 function sessionSecret(): string {
-  // El secreto de firma deriva de los secretos del servidor; nunca llega al
-  // cliente. Cambiar la clave o el secreto TOTP invalida las sesiones viejas.
-  return `${process.env.ADMIN_KEY ?? "dev"}::${process.env.ADMIN_TOTP_SECRET ?? "nototp"}`;
+  return process.env.ADMIN_KEY ?? "dev-session-secret";
 }
 
-/** Devuelve la instancia TOTP si hay secreto configurado; si no, null (2FA off). */
-export function getTotp(): TOTP | null {
-  const s = process.env.ADMIN_TOTP_SECRET;
-  if (!s) return null;
+// ── Contraseñas (scrypt) ──
+
+export function hashPassword(password: string): { salt: string; hash: string } {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return { salt, hash };
+}
+
+export function verifyPassword(password: string, salt: string, hash: string): boolean {
+  try {
+    const candidate = crypto.scryptSync(password, salt, 64);
+    const expected = Buffer.from(hash, "hex");
+    return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+  } catch {
+    return false;
+  }
+}
+
+// ── TOTP (2FA) ──
+
+export function makeTotp(base32Secret: string, label = "admin"): TOTP {
   return new TOTP({
     issuer: "Yield Admin",
-    label: "admin",
+    label,
     algorithm: "SHA1",
     digits: 6,
     period: 30,
-    secret: Secret.fromBase32(s),
+    secret: Secret.fromBase32(base32Secret),
   });
 }
 
-export function totpEnabled(): boolean {
-  return !!process.env.ADMIN_TOTP_SECRET;
-}
-
-/** Valida un código de 6 dígitos. Ventana ±1 para tolerar desfase de reloj. */
-export function verifyTotp(token: string): boolean {
-  const totp = getTotp();
-  if (!totp) return true; // 2FA no configurado → no se exige
+/** Valida un código de 6 dígitos contra el secreto del admin. Ventana ±1. */
+export function verifyTotp(base32Secret: string, token: string): boolean {
   const clean = String(token ?? "").replace(/\s/g, "");
   if (!/^\d{6}$/.test(clean)) return false;
-  return totp.validate({ token: clean, window: 1 }) !== null;
+  try {
+    return makeTotp(base32Secret).validate({ token: clean, window: 1 }) !== null;
+  } catch {
+    return false;
+  }
 }
 
-export function signSession(): string {
-  const payload = { exp: Date.now() + SESSION_TTL_MS };
+// ── Token de sesión (HMAC firmado) ──
+
+export function signSession(email: string): string {
+  const payload = { sub: email, exp: Date.now() + SESSION_TTL_MS };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const sig = crypto.createHmac("sha256", sessionSecret()).update(body).digest("base64url");
   return `${body}.${sig}`;
