@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongo";
+import { verifySession } from "@/lib/admin-auth";
 import { EMPTY_CURATION, RISK_ORDER, type Curation } from "@/lib/risk";
 
 // Curación de bolsas por perfil de riesgo, persistida en MongoDB.
@@ -35,10 +36,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // Solo el admin puede curar. La vista de usuario es de solo lectura.
-  const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && request.headers.get("x-admin-key") !== adminKey) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Solo el admin (con sesión 2FA válida) puede curar. La vista de usuario es
+  // de solo lectura.
+  if (!verifySession(request.headers.get("x-admin-token"))) {
+    return NextResponse.json({ error: "Sesión inválida o vencida. Volvé a ingresar." }, { status: 401 });
   }
 
   try {

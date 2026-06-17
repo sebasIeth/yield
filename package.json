@@ -13,6 +13,7 @@
     "@yieldxyz/sdk": "latest",
     "mongodb": "^7.3.0",
     "next": "^15.3.0",
+    "otpauth": "^9.5.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "viem": "^2.51.0",

@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { signSession, totpEnabled, verifyTotp } from "@/lib/admin-auth";
 
-// Valida la clave de admin server-side. La usa el gate de /admin para revelar
-// el panel solo con una clave correcta. Las escrituras (/api/curation) siguen
-// validando la clave por su cuenta, así que esto es UX, no la única defensa.
+// otpauth + node crypto requieren runtime Node (no Edge).
+export const runtime = "nodejs";
+
+// Login del admin: clave (1er factor) + código TOTP (2do factor, si está
+// configurado). Devuelve un token de sesión firmado para autorizar escrituras.
 export async function POST(request: NextRequest) {
   const adminKey = process.env.ADMIN_KEY;
-  const { key } = await request.json().catch(() => ({ key: "" }));
+  const { key, token } = await request.json().catch(() => ({ key: "", token: "" }));
 
-  // Si no hay ADMIN_KEY configurada, permitimos el acceso (solo dev).
-  if (!adminKey) return NextResponse.json({ ok: true });
-
-  if (key !== adminKey) {
+  // 1er factor: clave.
+  if (adminKey && key !== adminKey) {
     return NextResponse.json({ error: "Clave incorrecta" }, { status: 401 });
   }
-  return NextResponse.json({ ok: true });
+
+  // 2do factor: TOTP (solo si ADMIN_TOTP_SECRET está configurado).
+  if (totpEnabled()) {
+    if (!token) {
+      return NextResponse.json({ error: "Ingresá el código de 6 dígitos", needsTotp: true }, { status: 401 });
+    }
+    if (!verifyTotp(token)) {
+      return NextResponse.json({ error: "Código 2FA incorrecto", needsTotp: true }, { status: 401 });
+    }
+  }
+
+  return NextResponse.json({ ok: true, token: signSession(), totp: totpEnabled() });
 }

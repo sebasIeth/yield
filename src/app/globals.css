@@ -1976,3 +1976,8 @@ button.admin-link {
   cursor: pointer;
   font-family: inherit;
 }
+
+.admin-2fa-input {
+  letter-spacing: 0.4em;
+  font-weight: 700;
+}

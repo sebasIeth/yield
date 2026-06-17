@@ -35,57 +35,69 @@ const fmtType = (t?: string) =>
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
-  const [adminKey, setAdminKey] = useState("");
+  const [token, setToken] = useState("");
   const [keyInput, setKeyInput] = useState("");
+  const [codeInput, setCodeInput] = useState("");
   const [authError, setAuthError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  // Auto-login si ya hay una clave válida guardada en la sesión.
-  useEffect(() => {
-    const saved = sessionStorage.getItem("adminKey");
-    if (!saved) {
-      setChecking(false);
-      return;
+  // El token de sesión lleva su propio vencimiento (exp); lo validamos local
+  // para decidir si mostrar el panel. La firma se verifica en el servidor en
+  // cada escritura.
+  function sessionLive(t: string): boolean {
+    try {
+      const payload = JSON.parse(
+        atob(t.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))
+      );
+      return typeof payload.exp === "number" && payload.exp > Date.now();
+    } catch {
+      return false;
     }
-    verifyKey(saved)
-      .then((ok) => {
-        if (ok) {
-          setAdminKey(saved);
-          setAuthed(true);
-        } else {
-          sessionStorage.removeItem("adminKey");
-        }
-      })
-      .finally(() => setChecking(false));
-  }, []);
-
-  async function verifyKey(key: string): Promise<boolean> {
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
-    });
-    return res.ok;
   }
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem("adminToken");
+    if (saved && sessionLive(saved)) {
+      setToken(saved);
+      setAuthed(true);
+    } else if (saved) {
+      sessionStorage.removeItem("adminToken");
+    }
+    setChecking(false);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
-    const ok = await verifyKey(keyInput);
-    if (ok) {
-      sessionStorage.setItem("adminKey", keyInput);
-      setAdminKey(keyInput);
-      setAuthed(true);
-    } else {
-      setAuthError("Clave incorrecta. Intentá de nuevo.");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: keyInput, token: codeInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        sessionStorage.setItem("adminToken", data.token);
+        setToken(data.token);
+        setAuthed(true);
+      } else {
+        setAuthError(data.error ?? "No se pudo ingresar");
+      }
+    } catch {
+      setAuthError("Error de conexión");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const logout = () => {
-    sessionStorage.removeItem("adminKey");
+    sessionStorage.removeItem("adminToken");
     setAuthed(false);
-    setAdminKey("");
+    setToken("");
     setKeyInput("");
+    setCodeInput("");
   };
 
   if (checking) {
@@ -107,8 +119,7 @@ export default function AdminPage() {
             <h1 className="admin-login-brand">yield</h1>
             <h2 className="admin-login-title">Panel de administración</h2>
             <p className="admin-login-sub">
-              Curación de bolsas de yield por perfil de riesgo. Ingresá la clave de admin para
-              continuar.
+              Ingresá tu clave y el código de 6 dígitos de tu app de autenticación (2FA).
             </p>
             <form onSubmit={handleLogin} className="admin-login-form">
               <input
@@ -119,9 +130,19 @@ export default function AdminPage() {
                 onChange={(e) => setKeyInput(e.target.value)}
                 autoFocus
               />
+              <input
+                className="amount-input admin-login-input admin-2fa-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="Código 2FA"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ""))}
+              />
               {authError && <p className="form-error">{authError}</p>}
-              <button className="btn btn-primary" type="submit" disabled={!keyInput}>
-                Ingresar
+              <button className="btn btn-primary" type="submit" disabled={!keyInput || submitting}>
+                {submitting ? "Verificando..." : "Ingresar"}
               </button>
             </form>
             <a className="admin-login-back" href="/">&larr; Volver a la app</a>
@@ -131,10 +152,10 @@ export default function AdminPage() {
     );
   }
 
-  return <AdminPanel adminKey={adminKey} onLogout={logout} />;
+  return <AdminPanel token={token} onLogout={logout} />;
 }
 
-function AdminPanel({ adminKey, onLogout }: { adminKey: string; onLogout: () => void }) {
+function AdminPanel({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [yields, setYields] = useState<AdminYield[]>([]);
   const [curation, setCuration] = useState<Curation>(EMPTY_CURATION);
   const [loading, setLoading] = useState(true);
@@ -191,10 +212,10 @@ function AdminPanel({ adminKey, onLogout }: { adminKey: string; onLogout: () => 
     try {
       const res = await fetch("/api/curation", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
+        headers: { "Content-Type": "application/json", "x-admin-token": token },
         body: JSON.stringify(curation),
       });
-      if (res.status === 401) throw new Error("Clave de admin inválida");
+      if (res.status === 401) throw new Error("Sesión vencida. Salí y volvé a ingresar.");
       if (!res.ok) throw new Error((await res.json()).error ?? "Error al guardar");
       setStatus("saved");
     } catch (err: any) {
