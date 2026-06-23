@@ -1,138 +1,137 @@
 # 🟡 Yield.xyz Dashboard
 
-Dashboard de **DeFi yields** con experiencia de banca privada: el usuario hace
-un test de perfil de riesgo y recibe una **bolsa de inversiones curada**, ve su
-**portfolio valuado en USD** con una **calculadora de patrimonio**, e invierte
-de forma **no custodial** con su propia wallet. Un **panel de administración con
-2FA** decide qué yields ve cada perfil.
+A **DeFi yields** dashboard with a private-banking feel: users take a risk-profile
+quiz and get a **curated bag of investments**, see their **portfolio valued in
+USD** with a **wealth calculator**, and invest **non-custodially** with their own
+wallet. An **admin panel with 2FA** decides which yields each profile sees.
 
-> Construido sobre la API de [Yield.xyz](https://yield.xyz) (`api.stakek.it`).
-
----
-
-## ✨ Qué hace
-
-| Vista | Para quién | Descripción |
-|-------|------------|-------------|
-| **Sugeridos** | Usuario | Quiz de 4 preguntas → infiere tu perfil (Conservador / Balanceado / Agresivo) y te muestra una bolsa de yields curada |
-| **Portfolio** | Usuario | Posiciones valuadas en USD, saldo de billetera, ingreso diario/mensual y una calculadora de interés compuesto con proyección a años |
-| **Admin** `/admin` | Administrador | Cura las bolsas de cada perfil y apaga yields. Login con **email + contraseña + 2FA (TOTP)** |
-
-El usuario **solo** descubre yields a través de las bolsas curadas. El admin
-controla el contenido. Las inversiones son **no custodiales**: las transacciones
-se firman con la wallet del propio usuario.
+> Built on top of the [Yield.xyz](https://yield.xyz) API (`api.stakek.it`).
 
 ---
 
-## 🚀 Features destacadas
+## ✨ What it does
 
-- **Onboarding inteligente** — un quiz infiere el perfil de riesgo (no hay que elegirlo a ciegas).
-- **Bolsas curadas + fallback automático** — el admin arma cada bolsa; si no, se clasifican los yields por riesgo/APY y la bolsa nunca queda vacía.
-- **Valuación en USD en tiempo real** — precios y balances desde Yield.xyz.
-- **Calculadora de patrimonio** — interés compuesto con aportes mensuales, modo "proyección" y modo "objetivo", con gráfico.
-- **Inversión no custodial** — entrar/salir de un yield firmando con tu wallet (wagmi + RainbowKit).
-- **Panel admin con 2FA real** — email + contraseña (scrypt) + código TOTP, con alta por QR y token de sesión firmado que protege también la API.
-- **Kill switch** — apagar un yield lo oculta de toda la app al instante.
+| View | For whom | Description |
+|------|----------|-------------|
+| **Suggested** | User | A 4-question quiz infers your risk profile (Conservative / Balanced / Aggressive) and shows a curated bag of yields |
+| **Portfolio** | User | Positions valued in USD, wallet balance, daily/monthly income, and a compound-interest calculator with multi-year projection |
+| **Admin** `/admin` | Administrator | Curates each profile's bag and can disable yields. Login with **email + password + 2FA (TOTP)** |
+
+Users **only** discover yields through the curated bags. The admin controls the
+content. Investments are **non-custodial**: transactions are signed with the
+user's own wallet.
 
 ---
 
-## 🛠️ Tecnología
+## 🚀 Highlights
 
-| Capa | Tecnología |
-|------|------------|
+- **Smart onboarding** — a quiz infers the risk profile (no blind picking).
+- **Curated bags + automatic fallback** — the admin builds each bag; otherwise yields are classified by risk/APY and the bag is never empty.
+- **Real-time USD valuation** — prices and balances from Yield.xyz.
+- **Wealth calculator** — compound interest with monthly contributions, a "projection" mode and a "goal" mode, with a chart.
+- **Non-custodial investing** — enter/exit a yield by signing with your wallet (wagmi + RainbowKit).
+- **Real 2FA admin panel** — email + password (scrypt) + TOTP code, with QR enrollment and a signed session token that also protects the API.
+- **Kill switch** — disabling a yield hides it across the whole app instantly.
+
+---
+
+## 🛠️ Tech stack
+
+| Layer | Technology |
+|-------|------------|
 | Framework | **Next.js 15** (App Router) · **React 19** · **TypeScript** |
 | Web3 / Wallet | **wagmi** · **viem** · **RainbowKit** |
-| Fuente de datos | API de **Yield.xyz** (`api.stakek.it`) |
-| Base de datos | **MongoDB Atlas** (curación + usuarios admin) |
+| Data source | **Yield.xyz** API (`api.stakek.it`) |
+| Database | **MongoDB Atlas** (curation + admin users) |
 | 2FA | **otpauth** (TOTP, RFC 6238) · **qrcode** |
-| Seguridad | `node:crypto` — **scrypt** (contraseñas) · **HMAC-SHA256** (sesión) |
-| Estilos | CSS con variables de tema (dark + acento ámbar) |
+| Security | `node:crypto` — **scrypt** (passwords) · **HMAC-SHA256** (session) |
+| Styling | CSS with theme variables (dark + amber accent) |
 | Tooling / Deploy | **pnpm** · **Vercel** |
 
 ---
 
-## 🔐 Seguridad del login
+## 🔐 Login security
 
-El panel `/admin` usa **doble factor real**:
+The `/admin` panel uses **real two-factor authentication**:
 
-1. **Email + contraseña** — contraseñas hasheadas con **scrypt** (salt por
-   usuario), comparación de tiempo constante y error genérico anti-enumeración.
-2. **Código TOTP** — secreto propio por admin (Google Authenticator / Authy),
-   con flujo de **alta por QR** la primera vez.
+1. **Email + password** — passwords hashed with **scrypt** (per-user salt),
+   constant-time comparison, and a generic error to prevent user enumeration.
+2. **TOTP code** — a per-admin secret (Google Authenticator / Authy), with a
+   **QR enrollment** flow the first time.
 
-Tras los dos factores el servidor emite un **token de sesión firmado
-(HMAC-SHA256, 12 h)**. Ese token —no la contraseña— autoriza las escrituras de
-la API (`POST /api/curation`), así que **el 2FA protege la API, no solo la
-pantalla**. Los secretos viven únicamente en variables de entorno.
+After both factors, the server issues a **signed session token (HMAC-SHA256,
+12 h)**. That token — not the password — authorizes API writes
+(`POST /api/curation`), so **2FA protects the API, not just the screen**. Secrets
+live only in environment variables.
 
-📄 Detalle completo en **[ARQUITECTURA.md](./ARQUITECTURA.md)**.
+📄 Full details in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
 ---
 
-## ⚡ Cómo correrlo
+## ⚡ Getting started
 
-**Requisitos:** Node 18+, pnpm, una cuenta de MongoDB Atlas y una API key de Yield.xyz.
+**Requirements:** Node 18+, pnpm, a MongoDB Atlas account, and a Yield.xyz API key.
 
 ```bash
-# 1. Instalar dependencias
+# 1. Install dependencies
 pnpm install
 
-# 2. Configurar variables de entorno
-cp .env.example .env.local      # y completá los valores
+# 2. Configure environment variables
+cp .env.example .env.local      # then fill in the values
 
-# 3. Crear un usuario admin (genera contraseña + secreto 2FA y los imprime)
-node scripts/seed-admins.mjs tu@email.com
+# 3. Create an admin user (generates a password + 2FA secret and prints them)
+node scripts/seed-admins.mjs you@email.com
 
-# 4. Levantar el dev server
+# 4. Start the dev server
 pnpm dev                         # http://localhost:3003
 ```
 
-### Variables de entorno
+### Environment variables
 
-| Variable | Para qué |
-|----------|----------|
-| `YIELD_API_KEY` | API key de Yield.xyz |
-| `ADMIN_KEY` | Secreto del server para firmar los tokens de sesión (no es la contraseña) |
-| `MONGODB_URI` | Connection string de MongoDB Atlas |
-| `MONGODB_DB` | Nombre de la base (`yield_xyz`) |
+| Variable | Purpose |
+|----------|---------|
+| `YIELD_API_KEY` | Yield.xyz API key |
+| `ADMIN_KEY` | Server secret used to sign session tokens (not the login password) |
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `MONGODB_DB` | Database name (`yield_xyz`) |
 
 ---
 
-## 📁 Estructura
+## 📁 Project structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx          # App de usuario (Sugeridos + Portfolio + modales)
-│   ├── admin/page.tsx    # Panel admin (login 2FA + curación)
-│   └── api/              # Rutas server (yields, portfolio, prices, curation, login…)
+│   ├── page.tsx          # User app (Suggested + Portfolio + modals)
+│   ├── admin/page.tsx    # Admin panel (2FA login + curation)
+│   └── api/              # Server routes (yields, portfolio, prices, curation, login…)
 ├── lib/
-│   ├── yield-api.ts      # Cliente de Yield.xyz + caché
-│   ├── risk.ts           # Perfiles, clasificación de riesgo, bolsas
-│   ├── compound.ts       # Interés compuesto / proyección
-│   ├── mongo.ts          # Cliente MongoDB
-│   ├── admins.ts         # Usuarios admin
-│   └── admin-auth.ts     # scrypt + TOTP + token de sesión (HMAC)
+│   ├── yield-api.ts      # Yield.xyz client + cache
+│   ├── risk.ts           # Profiles, risk classification, bags
+│   ├── compound.ts       # Compound interest / projection
+│   ├── mongo.ts          # MongoDB client
+│   ├── admins.ts         # Admin users
+│   └── admin-auth.ts     # scrypt + TOTP + session token (HMAC)
 └── scripts/seed-admins.mjs
 ```
 
-Ver **[ARQUITECTURA.md](./ARQUITECTURA.md)** para el flujo de datos, la lógica
-de cada feature, los esquemas de MongoDB y la tabla de endpoints.
+See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the data flow, the logic of each
+feature, the MongoDB schemas, and the endpoint reference.
 
 ---
 
 ## ☁️ Deploy (Vercel)
 
-1. Conectar el repo a Vercel (detecta Next.js + pnpm automáticamente).
-2. Cargar las 4 variables de entorno en **Settings → Environment Variables**.
-3. En MongoDB Atlas → **Network Access**, permitir las IPs de Vercel (o `0.0.0.0/0`).
-4. **Redeploy**. La curación y los admins persisten en Atlas (compartido entre local y prod).
+1. Connect the repo to Vercel (it auto-detects Next.js + pnpm).
+2. Add the 4 environment variables under **Settings → Environment Variables**.
+3. In MongoDB Atlas → **Network Access**, allow Vercel's IPs (or `0.0.0.0/0`).
+4. **Redeploy**. Curation and admins persist in Atlas (shared between local and prod).
 
 ---
 
-## 📜 Notas
+## 📜 Notes
 
-- **No custodial**: la app nunca toma control de los fondos; el usuario firma sus
-  propias transacciones.
-- **Solo lectura para usuarios**: la curación se edita exclusivamente desde el
-  panel admin protegido por 2FA.
+- **Non-custodial**: the app never takes control of funds; users sign their own
+  transactions.
+- **Read-only for users**: curation is edited exclusively from the 2FA-protected
+  admin panel.
